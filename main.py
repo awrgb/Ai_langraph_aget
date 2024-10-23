@@ -149,6 +149,16 @@ if st.button("Grade Essay"):
             st.markdown(f"**Structure Score:** {result['structure_score']:.1f}")
             st.markdown(f"**Depth Score:** {result['depth_score']:.1f}")
             st.markdown(f"**Suggested Improvements:** {result['suggested_edits']}")
+
+            # Generate file with results
+            generate_file(result, "No additional comments")
+
+            # Feature 1: Display result as JSON
+            st.json(result)
+
+            # Feature 2: Download button for the result file
+            with open("grading_results.txt", "r") as file:
+                st.download_button("Download Grading Results", file, file_name="grading_results.txt")
         else:
             st.error("Please enter your essay.")
     else:
