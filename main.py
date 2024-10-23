@@ -2,10 +2,11 @@ import os
 import re
 import streamlit as st
 from dotenv import load_dotenv
-from typing import TypedDict
+from typing import TypedDict, Literal
 from langgraph.graph import StateGraph, END
 import google.generativeai as genai
 from langchain_core.prompts import ChatPromptTemplate
+from PIL import Image
 
 # Load environment variables
 load_dotenv()
@@ -28,19 +29,16 @@ class State(TypedDict):
     final_score: float
     suggested_edits: str
     topic: str
-    tone_score: float
-    citation_score: float
-    word_count: int
-    plagiarism_check: str
-    personalized_tips: str
 
-# Extract numeric score from LLM response
+# Function to extract score from LLM response
 def extract_score(content: str) -> float:
+    """Extract the numeric score from the LLM's response."""
     match = re.search(r'Score:\s*(\d+(\.\d+)?)', content)
     return float(match.group(1)) if match else 0.0
 
-# Real-time suggestions and grading workflow
+# Grading workflow
 def grade_essay(essay: str, topic: str) -> dict:
+    """Grade the given essay."""
     state = State(
         essay=essay,
         relevance_score=0.0,
@@ -50,11 +48,6 @@ def grade_essay(essay: str, topic: str) -> dict:
         final_score=0.0,
         suggested_edits="",
         topic=topic,
-        tone_score=0.0,
-        citation_score=0.0,
-        word_count=len(essay.split()),
-        plagiarism_check="",
-        personalized_tips=""
     )
 
     # Sequentially check relevance, grammar, structure, and depth
@@ -65,11 +58,6 @@ def grade_essay(essay: str, topic: str) -> dict:
         state = analyze_structure(state)
     if state['structure_score'] > 1:
         state = evaluate_depth(state)
-
-    # Additional checks
-    state = check_tone(state)
-    state = check_citations(state)
-    state = plagiarism_check(state)
 
     # Calculate final score
     state = calculate_final_score(state)
@@ -110,30 +98,6 @@ def evaluate_depth(state: State) -> State:
     state["depth_score"] = extract_score(result)
     return state
 
-def check_tone(state: State) -> State:
-    prompt = ChatPromptTemplate.from_template(
-        "Analyze the tone and formality of the essay. Provide a tone score between 0 and 2.5.\n\nEssay: {essay}"
-    )
-    result = llm.invoke(prompt.format(essay=state["essay"]))
-    state["tone_score"] = extract_score(result)
-    return state
-
-def check_citations(state: State) -> State:
-    prompt = ChatPromptTemplate.from_template(
-        "Analyze the citation and reference usage. Provide a citation score between 0 and 2.5.\n\nEssay: {essay}"
-    )
-    result = llm.invoke(prompt.format(essay=state["essay"]))
-    state["citation_score"] = extract_score(result)
-    return state
-
-def plagiarism_check(state: State) -> State:
-    prompt = ChatPromptTemplate.from_template(
-        "Check for any potential plagiarism in the following essay. Provide a yes/no response.\n\nEssay: {essay}"
-    )
-    result = llm.invoke(prompt.format(essay=state["essay"]))
-    state["plagiarism_check"] = result.strip()
-    return state
-
 def suggest_edits(state: State) -> State:
     prompt = ChatPromptTemplate.from_template(
         "Suggest improvements to the essay based on grammar, relevance, and structure.\n\nEssay: {essay}"
@@ -148,45 +112,53 @@ def calculate_final_score(state: State) -> State:
         state["relevance_score"] +
         state["grammar_score"] +
         state["structure_score"] +
-        state["depth_score"] +
-        state["tone_score"] +
-        state["citation_score"]
+        state["depth_score"]
     )
     return state
 
+def generate_file(result: dict, additional_comments: str) -> None:
+    """Generate a text file with the grading results and additional comments."""
+    with open("grading_results.txt", "w", encoding="utf-8") as file:
+        file.write(f"Final Essay Score: {result['final_score']:.1f}/10\n")
+        file.write(f"Relevance Score: {result['relevance_score']:.1f}\n")
+        file.write(f"Grammar Score: {result['grammar_score']:.1f}\n")
+        file.write(f"Structure Score: {result['structure_score']:.1f}\n")
+        file.write(f"Depth Score: {result['depth_score']:.1f}\n")
+        file.write(f"Suggested Improvements: {result['suggested_edits']}\n")
+        file.write(f"Additional Comments: {additional_comments}\n")
+
 # Streamlit UI
-st.title("💡 Cutting-Edge Essay Grading with Real-Time Suggestions")
+st.title("🌟 Essay Grading Application 🌟")
 
 # Input for topic
 st.text_input("Enter the topic:", key="topic")
 
 # Input for essay
-sample_essay = st.text_area("Start typing your essay:")
-
-# Word count display
-if sample_essay:
-    word_count = len(sample_essay.split())
-    st.write(f"**Word Count:** {word_count}")
+sample_essay = st.text_area("Please enter your essay:")
 
 # Submit button
-if st.button("Analyze Essay"):
+if st.button("Grade Essay"):
     if st.session_state.topic:
         if sample_essay:
             result = grade_essay(sample_essay, st.session_state.topic)
 
-            # Display results with real-time suggestions
-            st.markdown(f"### **Final Essay Score:** {result['final_score']:.1f}/15")
+            # Display results
+            st.markdown(f"### **Final Essay Score:** {result['final_score']:.1f}/10")
             st.markdown(f"**Relevance Score:** {result['relevance_score']:.1f}")
             st.markdown(f"**Grammar Score:** {result['grammar_score']:.1f}")
             st.markdown(f"**Structure Score:** {result['structure_score']:.1f}")
             st.markdown(f"**Depth Score:** {result['depth_score']:.1f}")
-            st.markdown(f"**Tone Score:** {result['tone_score']:.1f}")
-            st.markdown(f"**Citation Score:** {result['citation_score']:.1f}")
-            st.markdown(f"**Plagiarism Check:** {result['plagiarism_check']}")
             st.markdown(f"**Suggested Improvements:** {result['suggested_edits']}")
 
-            # Real-time suggestions and feedback
-            st.info(f"**Suggestions:** {result['suggested_edits']}")
+            # Generate file with results
+            generate_file(result, "No additional comments")
+
+            # Feature 1: Display result as JSON
+            st.json(result)
+
+            # Feature 2: Download button for the result file
+            with open("grading_results.txt", "r", encoding="utf-8") as file:
+                st.download_button("Download Grading Results", file, file_name="grading_results.txt")
         else:
             st.error("Please enter your essay.")
     else:
