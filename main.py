@@ -118,7 +118,7 @@ def calculate_final_score(state: State) -> State:
 
 def generate_file(result: dict, additional_comments: str) -> None:
     """Generate a text file with the grading results and additional comments."""
-    with open("grading_results.txt", "w") as file:
+    with open("grading_results.txt", "w", encoding="utf-8") as file:
         file.write(f"Final Essay Score: {result['final_score']:.1f}/10\n")
         file.write(f"Relevance Score: {result['relevance_score']:.1f}\n")
         file.write(f"Grammar Score: {result['grammar_score']:.1f}\n")
@@ -157,7 +157,7 @@ if st.button("Grade Essay"):
             st.json(result)
 
             # Feature 2: Download button for the result file
-            with open("grading_results.txt", "r") as file:
+            with open("grading_results.txt", "r", encoding="utf-8") as file:
                 st.download_button("Download Grading Results", file, file_name="grading_results.txt")
         else:
             st.error("Please enter your essay.")
